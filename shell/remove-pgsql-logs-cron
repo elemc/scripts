@@ -1,0 +1,4 @@
+# This script created for remove PostgreSQL log files
+# Use this script in /etc/cron.d/
+
+5 0 * * * root /usr/local/bin/remove-pgsql-logs.sh

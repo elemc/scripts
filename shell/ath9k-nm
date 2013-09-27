@@ -1,0 +1,11 @@
+#!/bin/sh
+
+
+if [ "$2" = "down" ]; then
+    if [ -x /sbin/modprobe ]; then
+	/sbin/modprobe -r ath9k || :
+	/sbin/modprobe ath9k || :
+    fi
+fi
+
+exit 0

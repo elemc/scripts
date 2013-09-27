@@ -1,0 +1,25 @@
+#!/bin/sh
+
+BUILD_STAGE=$1
+BUILD_SPEC=$2
+RPMBUILD_COMMAND=/usr/bin/rpmbuild
+CURRENT_DIR=`pwd`
+
+# yum-builddep
+YUMBUILDDEP_CMD=/usr/bin/yum-builddep
+
+LAST_YUM_ID=`sudo yum history list | tail -n +4 | head -n 1 | awk '{print $1}'`
+
+if [ -x $YUMBUILDDEP_CMD ]; then
+    sudo $YUMBUILDDEP_CMD -y ${BUILD_SPEC} || exit 1
+fi
+
+if [ -x $RPMBUILD_COMMAND ]; then
+    $RPMBUILD_COMMAND ${BUILD_STAGE} ${BUILD_SPEC} -D "_specdir ${CURRENT_DIR}" -D "_sourcedir ${CURRENT_DIR}" -D "_srcrpmdir ${CURRENT_DIR}" -D "_rpmdir ${CURRENT_DIR}"
+fi
+
+# clean installed packages
+CURRENT_LAST_YUM_ID=`sudo yum history list | tail -n +4 | head -n 1 | awk '{print $1}'`
+if [ "$LAST_YUM_ID" != "$CURRENT_LAST_YUM_ID" ]; then
+    sudo yum history undo last -y
+fi

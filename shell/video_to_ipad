@@ -1,0 +1,27 @@
+#!/bin/sh
+
+usage() {
+    echo "Use this as:"
+    echo "  video_to_ipad source-file dest-file"
+}
+
+if [ "$1" == "" ]; then
+    usage
+    exit 1;
+fi
+if [ "$2" == "" ]; then
+    usage
+    exit 1
+fi
+
+FFMPEG=/usr/bin/ffmpeg
+SOURCE_FILE=$1
+DEST_FILE=$2
+
+if [ -x $FFMPEG ]; then
+    $FFMPEG -s 1024x768 -r 30 -async 2 -aspect 16:9 -y -i ${SOURCE_FILE} -strict experimental -spre iPad ${DEST_FILE}
+else
+    echo "FFMpeg don't found!"
+    exit 1
+fi
+

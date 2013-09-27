@@ -1,0 +1,13 @@
+#!/bin/sh
+
+TRANS_BIN=/usr/bin/transmission-daemon
+if [ -x $TRANS_BIN ]; then
+    killall $TRANS_BIN
+    $TRANS_BIN -a "172.16.32.101,172.16.32.100,172.16.32.121,172.16.32.122" \
+               -c /srv/samba/torrents/incoming \
+	       --incomplete-dir /srv/samba/torrents/.incomplete \
+	       -t -u alex -v 3510 -p 9091 -o -y -P 51415 \
+	       -er -ep \
+	       -i 172.16.32.2 \
+	       -w /srv/samba/torrents
+fi

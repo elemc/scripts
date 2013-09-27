@@ -1,0 +1,7 @@
+#!/bin/sh
+
+DATETIME=`date +%Y-%m-%d_%H-%M`
+
+if [ -x /usr/bin/nc ]; then
+   /usr/bin/nc -l 30001 > /srv/backups/ariadna_logs_$DATETIME.tar.bz2
+fi

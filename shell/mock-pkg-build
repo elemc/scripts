@@ -1,0 +1,62 @@
+#!/bin/sh
+
+MOCK=/usr/bin/mock
+SSHFS=/usr/bin/sshfs
+FUSERMOUNT=/usr/bin/fusermount
+MNTPOINT=/mnt/repos
+
+if [ -x $MOCK ];then
+    echo "mock found."
+else
+    echo "mock not found! run `yum install mock`"
+    exit 1
+fi
+
+if [ -x $SSHFS ]; then
+    echo "sshfs found."
+else
+    echo "sshfs not found! run `yum install fuse-sshfs`"
+    exit 1
+fi
+
+if [ -x $FUSERMOUNT ]; then
+    echo "fusermount found."
+else
+    echo "fusermount not found! run `yum install fuse`"
+    exit 1
+fi
+
+# Mount
+echo "Try mount ${MNTPOINT}..."
+$SSHFS root@elemc.name:/srv/web/repos ${MNTPOINT} -o allow_other,uid=1000,gid=990 || exit 1
+echo "${MNTPOINT} mounted."
+
+DIST=$1
+ARCH="i386 x86_64"
+PKG=$2
+RESULTDIR=/tmp/mock-build-${DIST}
+# ${MNTPOINT}/incoming-pkgs/
+SUPPORTED_FEDORA_VERSIONS="15 16 17"
+
+if [ "$DIST" == "fedora" ]; then
+    for fver in $SUPPORTED_FEDORA_VERSIONS; do
+	for a in $ARCH; do
+	    $MOCK -r ${DIST}-${fver}-${a} --rebuild $PKG --resultdir $RESULTDIR || exit 1
+	done
+    done
+else
+    for a in $ARCH; do
+	$MOCK -r ${DIST}-${a} --rebuild $PKG --resultdir $RESULTDIR || exit 1
+    done
+fi
+
+# Copy local files
+cp -R ${RESULTDIR}/* ${MNTPOINT}/incoming-pkgs/
+
+# Run sortrpms
+ssh root@elemc.name 'python /usr/local/bin/sortrpms.py'
+
+# Umount
+$FUSERMOUNT -u ${MNTPOINT}
+
+rm -rf $RESULTDIR
