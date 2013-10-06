@@ -76,7 +76,7 @@ class AddDirToVimProjects < Object
 
     def scan_folder( folder, record, indent = INDENT )
         files = []
-        Dir.open( folder ).each do |entry|
+        Dir.open( folder ).sort.each do |entry|
             full_path = File.join( folder, entry )
             next unless add_entry? entry
 
