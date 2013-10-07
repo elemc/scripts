@@ -15,6 +15,7 @@ SKIP_DIR_ENTRIES    = [ '.',
                         '.git',
                         '.gitkeep',
                         'tmp',
+                        '.gitignore',
                       ]
 SKIP_EXT_ENTRIES    = [ '.pyc',
                         '.pyo',
@@ -30,6 +31,12 @@ class AddDirToVimProjects < Object
         end
         check_folders
         check_vimprojects
+
+        if @ok
+            @buf_file = IO.readlines( VIMPROJECTS_FILE )
+        else
+            @buf_file = nil
+        end
     end
 
     def is_ok?; @ok; end
@@ -37,24 +44,55 @@ class AddDirToVimProjects < Object
     def proceed
         return nil unless @ok
         @records = []
-        @folders.each do |folder|
+        @folders.each do |raw_folder|
+            folder = raw_folder
+            if raw_folder[-1] == "/"
+                folder = raw_folder[0..-2]
+            end
             path_to, name = File.split( folder )
             path_to
             record = []
-            record << "#{name}=#{folder} CD=. {" # top-level project record
+            tilda_folder = folder.sub( Dir.home, "~" )
+            root_level_record = "#{name}=#{tilda_folder} CD=. {"
+           
+            new_file = []
+            project_begin_index = @buf_file.index( root_level_record + "\n" )
+            project_end_index = @buf_file.size + 1 
+            unless project_begin_index.nil?
+                new_file += @buf_file[0...project_begin_index]
+                counter = 0
+                pos = project_begin_index
+                @buf_file[project_begin_index..@buf_file.size].each do |s|
+                    pos += 1
+                    counter += 1 if s.include? "{"
+                    counter -= 1 if s.include? "}"
+                    break if counter == 0
+                end
+                project_end_index = pos
+            else
+                new_file += @buf_file
+            end
+
+            puts "Begin: #{project_begin_index}. End: #{project_end_index}. Size: #{@buf_file.size}"
+
+            record << root_level_record # top-level project record
             scan_folder( folder, record )
             record << "}" # finalize record
-            @records << record.join( "\n" )
-        end
 
-        @records
+            new_file += record
+            new_file += @buf_file[project_end_index..@buf_file.size] if project_end_index <= @buf_file.size
+
+            @buf_file = new_file
+        end
     end
 
     def write
-        return nil if @records.size == 0
-        File.open( VIMPROJECTS_FILE, 'a' ) do |f|
-            f.puts("\n")
-            @records.each { |rec| f.puts( rec ) }
+        return nil if @buf_file.size == 0
+        File.open( VIMPROJECTS_FILE, 'w' ) do |f|
+            @buf_file.each do |rec|
+                next if rec == "\n"
+                f.puts( rec )
+            end
         end
     rescue
         puts "Error per open file #{VIMPROJECTS_FILE}"
@@ -67,10 +105,7 @@ class AddDirToVimProjects < Object
 
     def add_entry?( entry )
         return false if SKIP_DIR_ENTRIES.include? entry
-
-        # skip .pyc and .pyo files
         return false if SKIP_EXT_ENTRIES.include? File.extname( entry )
-
         true
     end
 
