@@ -16,7 +16,7 @@ SSHFS_CMD                   = "/usr/bin/sshfs root@elemc.name:/srv/web/repos #{M
 UMOUNT_CMD                  = "/usr/bin/fusermount -u #{MOUNT_POINT}"
 UPDATE_REPOS_CMD            = "ssh root@elemc.name 'python /usr/local/bin/sortrpms.py'"
 SUPPORTED_ARCHS             = [ "i386", "x86_64" ]
-SUPPORTED_FEDORA_VERSIONS   = [ "18", "19", "rawhide" ]
+SUPPORTED_FEDORA_VERSIONS   = [ "19", "20", "rawhide" ]
 SUPPORTED_EPEL_VERSIONS     = [ "6" ]
 
 class MockPkgBuild < Object
