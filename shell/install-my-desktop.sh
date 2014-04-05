@@ -35,14 +35,22 @@ function setup_variable() {
     fi
 }
 
+function my_chown() {
+    user=`getent passwd | grep $my_user_name`
+    uid=`echo $user | cut -d ':' -f 3`
+    gid=`echo $user | cut -d ':' -f 4`
+    chown -R ${uid}:${gid} $1
+}
+
 function install_sudo() {
     echo "[*] Install sudo for user ${my_user_name}"
     sudo_string="${my_user_name} ALL=(ALL) NOPASSWD: ALL"
     if [ -d /etc/sudoers.d ]; then
         echo $sudo_string > /etc/sudoers.d/${my_user_name}
+        chmod 440 /etc/sudoers.d/${my_user_name}
     else
         echo $sudo_string >> /etc/sudoers
-    fi
+    fi    
 }
 
 function install_elemc_repo() {
@@ -76,7 +84,11 @@ function install_elemc_repo() {
 function install_ssh_keys() {
     echo "[*] Install ssh keys from host ${head_host}"
     scp -q -r $my_user_name@${head_host}:~/.ssh ${home_dir}
-    chown -R ${my_user_name}:${my_user_name} ${home_dir}/.ssh
+    if [ -f /etc/slackware-version ]; then
+        sed -i s/"GSSAPIAuthentication no"//g ${home_dir}/.ssh/config
+    fi
+
+    my_chown ${home_dir}/.ssh
 }
 
 function install_vim_files() {
@@ -94,19 +106,19 @@ function install_vim_files() {
     # create new symlinks
     for vim_d in $vim_files_list; do 
         ln -sf ${home_dir}/workspace/vim-conf/$vim_d ${home_dir}/.$vim_d; 
-        echo $vim_d; 
     done
 
     su - alex << EOF
 $pushd_cmd ${home_dir} > /dev/null 2>&1
-[ ! -d workspace ] && mkdir workspace && chown -R ${my_user_name}:${my_user_name} workspace
+[ ! -d workspace ] && mkdir workspace
 $pushd_cmd workspace > /dev/null 2>&1
 git clone ${vim_conf_repo}
+git clone git@github.com:elemc/scripts.git
 $popd_cmd > /dev/null 2>&1
 git clone https://github.com/gmarik/vundle.git ${home_dir}/.vim/bundle/vundle
 $popd_cmd > /dev/null 2>&1
 EOF
-    chown -R ${my_user_name}:${my_user_name} ${home_dir}/workspace
+    my_chown ${home_dir}/workspace
 }
 
 function install_monaco_font() {
@@ -119,8 +131,17 @@ function install_monaco_font() {
         $pushd_cmd $local_fonts_dir > /dev/null 2>&1
         curl -s -O $monaco_font_url
         $popd_cmd > /dev/null 2>&1
+        my_chown $local_fonts_dir
         su - ${my_user_name} -c "fc-cache -fv"
     fi
+}
+
+function install_zsh() {
+    # TODO: will do
+}
+
+function install_samba() {
+    # TODO: will do
 }
 
 function main() {
@@ -148,10 +169,18 @@ function main() {
     # Install sudo
     install_sudo
 
-    # Install elemc-repo
+    # Install elemc-repo or change locale
     if [ -f /etc/redhat-release ]; then
         install_elemc_repo
-    fi    
+    elif [ -f /etc/slackware-version ]; then
+        echo "[*] Change locale to Russian"
+        for lang_file in lang.sh lang.csh; do
+            sed -i s/en_US/ru_RU.UTF-8/g /etc/profile.d/${lang_file}
+            sed -i s/"export LC_COLLATE=C"/"#export LC_COLLATE=C"/g /etc/profile.d/${lang_file}
+            sed -i s/"setenv LC_COLLATE C"/"#setenv LC_COLLATE C"/g /etc/profile.d/${lang_file}
+        done
+        sed -i s/"id:3:initdefault:"/"id:4:initdefault:"/g /etc/inittab
+    fi
 
     # Install ssh-keys (user)
     install_ssh_keys
@@ -161,6 +190,12 @@ function main() {
 
     # Install monaco font
     install_monaco_font
+
+    # Install zsh
+    install_zsh
+
+    # Install samba
+    install_samba
 }
 
 main $*
