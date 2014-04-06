@@ -147,6 +147,12 @@ function install_samba() {
 }
 
 function main() {
+
+    if [ $EUID -ne 0 ]; then
+        echo "[X] This script must be run only with root privileges."
+        exit 1
+    fi
+
     head_host=$(setup_variable $1 alex-desktop)
 
     # Checks
