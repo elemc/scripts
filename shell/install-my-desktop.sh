@@ -4,7 +4,7 @@ error_present=0
 my_user_name="alex"
 home_dir="/home/${my_user_name}"
 vim_conf_repo="git@github.com:elemc/vim-conf.git"
-monaco_font_url="http://repo.elemc.name/sources/Monaco_Linux.ttf"
+monaco_font_url="http://repo.elemc.name/download/sources/Monaco_Linux.ttf"
 epel_6_rurl="http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm"
 epel_5_rurl="http://download.fedoraproject.org/pub/epel/5/i386/epel-release-5-4.noarch.rpm"
 
@@ -126,22 +126,24 @@ function install_monaco_font() {
     if [ -f /etc/redhat-release ]; then # It is RedHat/Fedora, install rpm-package
         yum -y install gringod-monaco-linux-fonts
     else
-        local_fonts_dir="${home_dir}/.local/share/fonts"
+        local_fonts_dir="${home_dir}/.fonts/"
         mkdir -p $local_fonts_dir
         $pushd_cmd $local_fonts_dir > /dev/null 2>&1
         curl -s -O $monaco_font_url
         $popd_cmd > /dev/null 2>&1
         my_chown $local_fonts_dir
-        su - ${my_user_name} -c "fc-cache -fv"
+        su - ${my_user_name} -c "fc-cache -f"
     fi
 }
 
 function install_zsh() {
     # TODO: will do
+    echo "[ ] zsh"
 }
 
 function install_samba() {
     # TODO: will do
+    echo "[ ] samba"
 }
 
 function main() {
