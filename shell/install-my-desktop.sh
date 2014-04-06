@@ -11,6 +11,29 @@ epel_5_rurl="http://download.fedoraproject.org/pub/epel/5/i386/epel-release-5-4.
 pushd_cmd="pushd"
 popd_cmd="popd"
 
+need_commands="ctags nmbd smbd /bin/zsh" 
+
+function what_is_distro() {
+    if [ -f /etc/redhat-release ]; then
+        release=`rpm -qa \*-release`
+        el_release=`echo $release | grep -Ei "oracle|redhat|centos|sl"`
+        if [ -z $el_release ]; then
+            echo "fedora"
+        else
+            echo "el"
+        fi
+        return 0
+    elif [ -f /etc/debian_version ]; then
+        echo "debian"
+        return 0
+    elif [ -f /etc/slackware-version]; then
+        echo "slackware"
+        return 0
+    fi
+
+    echo "unknown"
+}
+
 function check_command() {
     unset cmd_path
     cmd=$1
@@ -55,15 +78,12 @@ function install_sudo() {
 
 function install_elemc_repo() {
     echo "[*] Install elemc repository"
-    release=`rpm -qa \*-release`
-    el_release=`echo $release | grep -Ei "oracle|redhat|centos|sl"`
     repo_file=""
-    if [ -z $el_release ]; then # It is Fedora
+    if [ "$linux_distr" == "fedora" ]; then
         repo_file="http://repo.elemc.name/download/elemc-repo-fedora.repo"
-    else
-        repo_file="http://repo.elemc.name/download/elemc-el.repo"
+    else # EL
         echo "[*] Install epel repository"
-        el_version=`echo "$el_release" | cut -d"-" -f3`
+        el_version=`rpm -qa \*-release | grep -Ei "oracle|redhat|centos|sl" | cut -d"-" -f3`
         release_url=""
         if [ $el_version -eq 6 ]; then
             release_url=$epel_6_rurl
@@ -154,6 +174,7 @@ function main() {
     fi
 
     head_host=$(setup_variable $1 alex-desktop)
+    linux_distr=$(what_is_distro)
 
     # Checks
     check_command git
@@ -178,9 +199,11 @@ function main() {
     install_sudo
 
     # Install elemc-repo or change locale
-    if [ -f /etc/redhat-release ]; then
+    #if [ -f /etc/redhat-release ]; then
+
+    if [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
         install_elemc_repo
-    elif [ -f /etc/slackware-version ]; then
+    elif [ "$linux_distr" == "slackware" ]; then
         echo "[*] Change locale to Russian"
         for lang_file in lang.sh lang.csh; do
             sed -i s/en_US/ru_RU.UTF-8/g /etc/profile.d/${lang_file}
