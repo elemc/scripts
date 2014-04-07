@@ -6,11 +6,13 @@ my_user_name="alex"
 home_dir="/home/${my_user_name}"
 vim_conf_repo="git@github.com:elemc/vim-conf.git"
 monaco_font_url="http://repo.elemc.name/download/sources/Monaco_Linux.ttf"
+smb_conf_url="http://repo.elemc.name/download/sources/smb.conf"
 epel_6_rurl="http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm"
 epel_5_rurl="http://download.fedoraproject.org/pub/epel/5/i386/epel-release-5-4.noarch.rpm"
 
 pushd_cmd="pushd"
 popd_cmd="popd"
+curl_cmd="curl -s"
 pkg_install_debian="apt-get -y -q=2 install"
 pkg_install_yum="yum -y -q install"
 
@@ -20,7 +22,7 @@ function what_is_distro() {
     if [ -f /etc/redhat-release ]; then
         release=`rpm -qa \*-release`
         el_release=`echo $release | grep -Ei "oracle|redhat|centos|sl"`
-        if [ -z $el_release ]; then
+        if [ -z "$el_release" ]; then
             echo "fedora"
         else
             echo "el"
@@ -29,7 +31,7 @@ function what_is_distro() {
     elif [ -f /etc/debian_version ]; then
         echo "debian"
         return 0
-    elif [ -f /etc/slackware-version]; then
+    elif [ -f /etc/slackware-version ]; then
         echo "slackware"
         return 0
     fi
@@ -113,8 +115,9 @@ function install_elemc_repo() {
     if [ "$linux_distr" == "fedora" ]; then
         repo_file="http://repo.elemc.name/download/elemc-repo-fedora.repo"
     else # EL
+        repo_file="http://repo.elemc.name/download/elemc-el.repo"
         echo "[*] Install epel repository"
-        el_version=`rpm -qa \*-release | grep -Ei "oracle|redhat|centos|sl" | cut -d"-" -f3`
+        el_version=`rpm -qa \*-release | grep -Ei "oracle|redhat|centos|sl" | cut -d"-" -f3 | cut -d"." -f1`
         release_url=""
         if [ $el_version -eq 6 ]; then
             release_url=$epel_6_rurl
@@ -128,7 +131,7 @@ function install_elemc_repo() {
         [ -z $release_url ] || rpm -Uvh $release_url
     fi
     $pushd_cmd /etc/yum.repos.d > /dev/null 2>&1
-    curl -O $repo_file > /dev/null 2>&1
+    $curl_cmd -O $repo_file > /dev/null 2>&1
     $popd_cmd > /dev/null 2>&1
 }
 
@@ -150,6 +153,7 @@ function install_vim_files() {
 
     check_command /usr/bin/git
     check_command /usr/bin/scp
+    check_command /usr/bin/ctags
 
     vim_files_list="vim vimrc"
 
@@ -162,15 +166,15 @@ function install_vim_files() {
 
     # create new symlinks
     for vim_d in $vim_files_list; do 
-        ln -sf ${home_dir}/workspace/vim-conf/$vim_d ${home_dir}/.$vim_d; 
-    done
+        ln -sf ${home_dir}/workspace/vim-conf/$vim_d ${home_dir}/.$vim_d 
+        my_chown ${home_dir}/.$vim_d
+    done    
 
     su - alex << EOF
 $pushd_cmd ${home_dir} > /dev/null 2>&1
 [ ! -d workspace ] && mkdir workspace
 $pushd_cmd workspace > /dev/null 2>&1
 git clone ${vim_conf_repo}
-git clone git@github.com:elemc/scripts.git
 $popd_cmd > /dev/null 2>&1
 git clone https://github.com/gmarik/vundle.git ${home_dir}/.vim/bundle/vundle
 $popd_cmd > /dev/null 2>&1
@@ -190,7 +194,7 @@ function install_monaco_font() {
         local_fonts_dir="${home_dir}/.fonts/"
         mkdir -p $local_fonts_dir
         $pushd_cmd $local_fonts_dir > /dev/null 2>&1
-        curl -s -O $monaco_font_url
+        $curl_cmd -O $monaco_font_url
         $popd_cmd > /dev/null 2>&1
         my_chown $local_fonts_dir
         su - ${my_user_name} -c "fc-cache -f"
@@ -212,9 +216,52 @@ function install_zsh() {
     echo "[ ] zsh"
 }
 
+function selinux_enable_samba() {
+    check_command /usr/sbin/setsebool
+    setsebool -P allow_smbd_anon_write=1 samba_enable_home_dirs=1 samba_export_all_rw=1 samba_export_all_ro=1 use_samba_home_dirs=1
+}
+
 function install_samba() {
-    # TODO: will do
-    echo "[ ] samba"
+    echo "[*] Install samba"
+
+    check_command /usr/sbin/nmbd
+    check_command /usr/sbin/smbd
+    check_command /usr/bin/curl
+    check_command /bin/hostname
+
+    hostname=`hostname | cut -d "." -f 1`
+    # workaround for new fedora fresh installs
+    if [ "$hostname" == "localhost" ]; then
+        hostname="$linux_distr-$(date +%H%M%S)"
+    fi
+
+    netbiosname=`echo $hostname | awk '{print toupper($0)}'`
+    description="Samba service on $hostname"
+
+    $pushd_cmd /etc/samba > /dev/null 2>&1
+    $curl_cmd -O $smb_conf_url 
+    sed -i s/COMPUTER_NAME/${netbiosname}/g smb.conf
+    sed -i s/DESCRIPTION/"${description}"/g smb.conf
+
+    # Start/restart service
+    if   [ "$linux_distr" == "fedora" ]; then
+        selinux_enable_samba        
+        systemctl start smb nmb
+        systemctl enable smb nmb
+    elif [ "$linux_distr" == "el" ]; then
+        selinux_enable_samba
+        service smb start && service nmb start
+        chkconfig smb on && chkconfig nmb on        
+        chmod og+rx ${home_dir} # only for el 5/6 workaround
+    elif [ "$linux_distr" == "debian" ]; then
+        service samba restart
+    elif [ "$linux_distr" == "slackware" ]; then
+        sed -i s/"force group		= alex"/"force group		= users"/g smb.conf
+        [ ! -x /etc/rc.d/rc.samba ] && chmod +x /etc/rc.d/rc.samba
+        /etc/rc.d/rc.samba start
+    fi
+
+    $popd_cmd > /dev/null 2>&1
 }
 
 function main() {
