@@ -1,6 +1,7 @@
 #!/bin/sh
 
 error_present=0
+
 my_user_name="alex"
 home_dir="/home/${my_user_name}"
 vim_conf_repo="git@github.com:elemc/vim-conf.git"
@@ -10,8 +11,10 @@ epel_5_rurl="http://download.fedoraproject.org/pub/epel/5/i386/epel-release-5-4.
 
 pushd_cmd="pushd"
 popd_cmd="popd"
+pkg_install_debian="apt-get -y -q=2 install"
+pkg_install_yum="yum -y -q install"
 
-need_commands="ctags nmbd smbd /bin/zsh" 
+#need_commands="ctags nmbd smbd /bin/zsh" 
 
 function what_is_distro() {
     if [ -f /etc/redhat-release ]; then
@@ -34,19 +37,42 @@ function what_is_distro() {
     echo "unknown"
 }
 
+function get_package_name_by_cmd() {    
+    if   [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
+        echo $1
+    elif [ "$linux_distr" == "debian" ]; then
+        package=`apt-file -Fl search $1`
+        echo $package
+    fi
+}
+
+function install_files() {
+    commands=$1
+
+    if   [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
+        $pkg_install_yum $commands || error_present=1
+    elif [ "$linux_distr" == "debian" ]; then
+        packages=""
+        for cmd in $commands; do
+            pkg=$(get_package_name_by_cmd $cmd)
+            packages="$packages $pkg" 
+        done
+        $pkg_install_debian $packages > /dev/null 2>&1 || error_present=1
+    elif [ "$linux_distr" == "slackware" ]; then
+        slackpkg install $packages || error_present=1
+    fi  
+}
+
 function check_command() {
-    unset cmd_path
     cmd=$1
-    cmd_present=`which $cmd > /dev/null 2>&1`
-    if [ -z $cmd_present ]; then
-        cmd_path="/usr/bin/${cmd}"
-    else
-        cmd_path=$cmd_present
+
+    if [ ! -x $cmd ]; then
+        install_files $cmd        
     fi
 
-    if [ ! -x $cmd_path ]; then
-        echo "[x] Please install ${cmd}!"
-        error_present=1
+    if [ $error_present -eq 1 ]; then
+        echo "[X] Error. Command $cmd not found and try to install it failed."
+        exit 1
     fi
 }
 
@@ -59,6 +85,8 @@ function setup_variable() {
 }
 
 function my_chown() {
+    check_command /usr/bin/getent
+
     user=`getent passwd | grep $my_user_name`
     uid=`echo $user | cut -d ':' -f 3`
     gid=`echo $user | cut -d ':' -f 4`
@@ -78,6 +106,9 @@ function install_sudo() {
 
 function install_elemc_repo() {
     echo "[*] Install elemc repository"
+
+    check_command /usr/bin/curl
+
     repo_file=""
     if [ "$linux_distr" == "fedora" ]; then
         repo_file="http://repo.elemc.name/download/elemc-repo-fedora.repo"
@@ -90,11 +121,11 @@ function install_elemc_repo() {
         elif [ $el_version -eq 5 ]; then
             release_url=$epel_5_rurl
         else
-            echo "[x] Don't know EL release: ${el_release}"
+            echo "[x] Don't known EL release: ${el_release}"
             unset release_url
         fi
 
-        [ -n $release_url ] && rpm -Uvh $release_url
+        [ -z $release_url ] || rpm -Uvh $release_url
     fi
     $pushd_cmd /etc/yum.repos.d > /dev/null 2>&1
     curl -O $repo_file > /dev/null 2>&1
@@ -103,6 +134,9 @@ function install_elemc_repo() {
 
 function install_ssh_keys() {
     echo "[*] Install ssh keys from host ${head_host}"
+
+    check_command /usr/bin/scp
+
     scp -q -r $my_user_name@${head_host}:~/.ssh ${home_dir}
     if [ -f /etc/slackware-version ]; then
         sed -i s/"GSSAPIAuthentication no"//g ${home_dir}/.ssh/config
@@ -113,6 +147,9 @@ function install_ssh_keys() {
 
 function install_vim_files() {
     echo "[*] Install vim user files from git"
+
+    check_command /usr/bin/git
+    check_command /usr/bin/scp
 
     vim_files_list="vim vimrc"
 
@@ -143,8 +180,12 @@ EOF
 
 function install_monaco_font() {
     echo "[*] Install Monaco font"
+
+    check_command /usr/bin/curl
+    check_command /usr/bin/fc-cache
+
     if [ -f /etc/redhat-release ]; then # It is RedHat/Fedora, install rpm-package
-        yum -y install gringod-monaco-linux-fonts
+        $pkg_install_yum gringod-monaco-linux-fonts
     else
         local_fonts_dir="${home_dir}/.fonts/"
         mkdir -p $local_fonts_dir
@@ -154,6 +195,16 @@ function install_monaco_font() {
         my_chown $local_fonts_dir
         su - ${my_user_name} -c "fc-cache -f"
     fi
+}
+
+function change_slackware_locale() {
+    echo "[*] Change locale to Russian"
+    for lang_file in lang.sh lang.csh; do
+        sed -i s/en_US/ru_RU.UTF-8/g /etc/profile.d/${lang_file}
+        sed -i s/"export LC_COLLATE=C"/"#export LC_COLLATE=C"/g /etc/profile.d/${lang_file}
+        sed -i s/"setenv LC_COLLATE C"/"#setenv LC_COLLATE C"/g /etc/profile.d/${lang_file}
+    done
+    sed -i s/"id:3:initdefault:"/"id:4:initdefault:"/g /etc/inittab
 }
 
 function install_zsh() {
@@ -176,12 +227,17 @@ function main() {
     head_host=$(setup_variable $1 alex-desktop)
     linux_distr=$(what_is_distro)
 
+    echo "[*] Begin installation"
+
     # Checks
-    check_command git
-    check_command scp
-    check_command curl
-    check_command fc-cache
-    check_command getent
+    if [ "$linux_distr" == "debian" ]; then
+        if [ ! -x /usr/bin/apt-file ]; then
+            $pkg_install_debian apt-file > /dev/null 2>&1 || error_present=1
+        fi
+        if [ $error_present -ne 1 ]; then
+            apt-file update > /dev/null 2>&1
+        fi
+    fi
 
     # Check user present
     user_present=`getent passwd | grep $my_user_name`
@@ -199,18 +255,10 @@ function main() {
     install_sudo
 
     # Install elemc-repo or change locale
-    #if [ -f /etc/redhat-release ]; then
-
     if [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
         install_elemc_repo
     elif [ "$linux_distr" == "slackware" ]; then
-        echo "[*] Change locale to Russian"
-        for lang_file in lang.sh lang.csh; do
-            sed -i s/en_US/ru_RU.UTF-8/g /etc/profile.d/${lang_file}
-            sed -i s/"export LC_COLLATE=C"/"#export LC_COLLATE=C"/g /etc/profile.d/${lang_file}
-            sed -i s/"setenv LC_COLLATE C"/"#setenv LC_COLLATE C"/g /etc/profile.d/${lang_file}
-        done
-        sed -i s/"id:3:initdefault:"/"id:4:initdefault:"/g /etc/inittab
+        change_slackware_locale
     fi
 
     # Install ssh-keys (user)
@@ -227,6 +275,8 @@ function main() {
 
     # Install samba
     install_samba
+
+    echo "[*] Install finished."
 }
 
 main $*
