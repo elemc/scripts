@@ -15,11 +15,14 @@ popd_cmd="popd"
 curl_cmd="curl -s"
 pkg_install_debian="apt-get -y -q=2 install"
 pkg_install_yum="yum -y -q install"
-
-#need_commands="ctags nmbd smbd /bin/zsh" 
+pkg_install_suse="zypper -n -q install"
 
 function what_is_distro() {
-    if [ -f /etc/redhat-release ]; then
+    if   [ -f /etc/os-release ]; then
+        distr_name=`grep -E "^ID=\W*" /etc/os-release| cut -d "=" -f 2`
+        echo $distr_name
+        return 0
+    elif [ -f /etc/redhat-release ]; then
         release=`rpm -qa \*-release`
         el_release=`echo $release | grep -Ei "oracle|redhat|centos|sl"`
         if [ -z "$el_release" ]; then
@@ -30,6 +33,9 @@ function what_is_distro() {
         return 0
     elif [ -f /etc/debian_version ]; then
         echo "debian"
+        return 0
+    elif [ -f /etc/SuSE-release ]; then
+        echo "suse"
         return 0
     elif [ -f /etc/slackware-version ]; then
         echo "slackware"
@@ -42,8 +48,11 @@ function what_is_distro() {
 function get_package_name_by_cmd() {    
     if   [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
         echo $1
-    elif [ "$linux_distr" == "debian" ]; then
+    elif [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ]; then
         package=`apt-file -Fl search $1`
+        echo $package
+    elif [ "$linux_distr" == "opensuse" ]; then
+        package=`LANG=C zypper -x search -f $1 | grep -oP "name=\"(.*)\"" | cut -d " " -f 1 | cut -d "=" -f 2 | sed "s/\"//g"`
         echo $package
     fi
 }
@@ -53,7 +62,7 @@ function install_files() {
 
     if   [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
         $pkg_install_yum $commands || error_present=1
-    elif [ "$linux_distr" == "debian" ]; then
+    elif [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ]; then
         packages=""
         for cmd in $commands; do
             pkg=$(get_package_name_by_cmd $cmd)
@@ -62,6 +71,13 @@ function install_files() {
         $pkg_install_debian $packages > /dev/null 2>&1 || error_present=1
     elif [ "$linux_distr" == "slackware" ]; then
         slackpkg install $packages || error_present=1
+    elif [ "$linux_distr" == "opensuse" ]; then
+        packages=""
+        for cmd in $commands; do
+            pkg=$(get_package_name_by_cmd $cmd)
+            packages="$packages $pkg" 
+        done
+        $pkg_install_suse $packages || error_present=1
     fi  
 }
 
@@ -174,9 +190,9 @@ function install_vim_files() {
 $pushd_cmd ${home_dir} > /dev/null 2>&1
 [ ! -d workspace ] && mkdir workspace
 $pushd_cmd workspace > /dev/null 2>&1
-git clone ${vim_conf_repo}
+git clone -q ${vim_conf_repo}
 $popd_cmd > /dev/null 2>&1
-git clone https://github.com/gmarik/vundle.git ${home_dir}/.vim/bundle/vundle
+git clone -q https://github.com/gmarik/vundle.git ${home_dir}/.vim/bundle/vundle
 $popd_cmd > /dev/null 2>&1
 EOF
     my_chown ${home_dir}/workspace
@@ -253,12 +269,16 @@ function install_samba() {
         service smb start && service nmb start
         chkconfig smb on && chkconfig nmb on        
         chmod og+rx ${home_dir} # only for el 5/6 workaround
-    elif [ "$linux_distr" == "debian" ]; then
+    elif [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ]; then
         service samba restart
     elif [ "$linux_distr" == "slackware" ]; then
         sed -i s/"force group		= alex"/"force group		= users"/g smb.conf
         [ ! -x /etc/rc.d/rc.samba ] && chmod +x /etc/rc.d/rc.samba
         /etc/rc.d/rc.samba start
+    elif [ "$linux_distr" == "opensuse" ]; then
+        sed -i s/"force group		= alex"/"force group		= users"/g smb.conf
+        systemctl start smb nmb
+        systemctl enable smb nmb
     fi
 
     $popd_cmd > /dev/null 2>&1
@@ -277,7 +297,7 @@ function main() {
     echo "[*] Begin installation"
 
     # Checks
-    if [ "$linux_distr" == "debian" ]; then
+    if [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ]; then
         if [ ! -x /usr/bin/apt-file ]; then
             $pkg_install_debian apt-file > /dev/null 2>&1 || error_present=1
         fi
