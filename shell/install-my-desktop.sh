@@ -16,11 +16,15 @@ curl_cmd="curl -s"
 pkg_install_debian="apt-get -y -q=2 install"
 pkg_install_yum="yum -y -q install"
 pkg_install_suse="zypper -n -q install"
+pkg_install_mageia="urpmi --quiet --force"
 
 function what_is_distro() {
     if   [ -f /etc/os-release ]; then
         distr_name=`grep -E "^ID=\W*" /etc/os-release| cut -d "=" -f 2`
         echo $distr_name
+        return 0
+    elif [ -f /etc/mandriva-release ]; then
+        echo "mageia"
         return 0
     elif [ -f /etc/redhat-release ]; then
         release=`rpm -qa \*-release`
@@ -54,30 +58,36 @@ function get_package_name_by_cmd() {
     elif [ "$linux_distr" == "opensuse" ]; then
         package=`LANG=C zypper -x search -f $1 | grep -oP "name=\"(.*)\"" | cut -d " " -f 1 | cut -d "=" -f 2 | sed "s/\"//g"`
         echo $package
+    elif [ "$linux_distr" == "mageia" ]; then
+        package=`urpmf "^${1}$" | cut -d ":" -f 1`
+        echo $package
     fi
 }
 
 function install_files() {
     commands=$1
+    packages=""
+
+    if [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ] || [ "$linux_distr" == "opensuse" ] || [ "$linux_distr" == "mageia" ]; then
+        for cmd in $commands; do
+            pkg=$(get_package_name_by_cmd $cmd)
+            packages="$packages $pkg" 
+        done
+    else
+        packages=$commands
+    fi
+
 
     if   [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
         $pkg_install_yum $commands || error_present=1
     elif [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ]; then
-        packages=""
-        for cmd in $commands; do
-            pkg=$(get_package_name_by_cmd $cmd)
-            packages="$packages $pkg" 
-        done
         $pkg_install_debian $packages > /dev/null 2>&1 || error_present=1
     elif [ "$linux_distr" == "slackware" ]; then
         slackpkg install $packages || error_present=1
     elif [ "$linux_distr" == "opensuse" ]; then
-        packages=""
-        for cmd in $commands; do
-            pkg=$(get_package_name_by_cmd $cmd)
-            packages="$packages $pkg" 
-        done
         $pkg_install_suse $packages || error_present=1
+    elif [ "$linux_distr" == "mageia" ]; then
+        $pkg_install_mageia $packages || error_present=1
     fi  
 }
 
@@ -113,6 +123,9 @@ function my_chown() {
 
 function install_sudo() {
     echo "[*] Install sudo for user ${my_user_name}"
+
+    check_command /usr/bin/sudo
+
     sudo_string="${my_user_name} ALL=(ALL) NOPASSWD: ALL"
     if [ -d /etc/sudoers.d ]; then
         echo $sudo_string > /etc/sudoers.d/${my_user_name}
@@ -169,7 +182,11 @@ function install_vim_files() {
 
     check_command /usr/bin/git
     check_command /usr/bin/scp
-    check_command /usr/bin/ctags
+    if [ "$linux_distr" == "mageia" ]; then
+        check_command /usr/bin/exuberant-ctags
+    else
+        check_command /usr/bin/ctags
+    fi
 
     vim_files_list="vim vimrc"
 
@@ -204,7 +221,7 @@ function install_monaco_font() {
     check_command /usr/bin/curl
     check_command /usr/bin/fc-cache
 
-    if [ -f /etc/redhat-release ]; then # It is RedHat/Fedora, install rpm-package
+    if [ "$linux_distr" == "el" ] || [ "$linux_distr" == "fedora" ]; then # It is RedHat/Fedora, install rpm-package
         $pkg_install_yum gringod-monaco-linux-fonts
     else
         local_fonts_dir="${home_dir}/.fonts/"
@@ -277,6 +294,9 @@ function install_samba() {
         /etc/rc.d/rc.samba start
     elif [ "$linux_distr" == "opensuse" ]; then
         sed -i s/"force group		= alex"/"force group		= users"/g smb.conf
+        systemctl start smb nmb
+        systemctl enable smb nmb
+    elif [ "$linux_distr" == "mageia" ]; then
         systemctl start smb nmb
         systemctl enable smb nmb
     fi
