@@ -182,6 +182,12 @@ function install_vim_files() {
 
     check_command /usr/bin/git
     check_command /usr/bin/scp
+    if [ "$linux_distr" == "ubuntu" ] || [ "$linux_distr" == "debian" ]; then
+        check_command /usr/bin/vim.basic
+    else
+        check_command /usr/bin/vim
+    fi
+
     if [ "$linux_distr" == "mageia" ]; then
         check_command /usr/bin/exuberant-ctags
     else
@@ -213,6 +219,7 @@ git clone -q https://github.com/gmarik/vundle.git ${home_dir}/.vim/bundle/vundle
 $popd_cmd > /dev/null 2>&1
 EOF
     my_chown ${home_dir}/workspace
+    su - alex -c "vim -c \"BundleUpdate\" -c \"quitall\""
 }
 
 function install_monaco_font() {
@@ -313,6 +320,11 @@ function main() {
 
     head_host=$(setup_variable $1 alex-desktop)
     linux_distr=$(what_is_distro)
+
+    # F*cking RFRemix workaround
+    if [ "$linux_distr" == "rfremix" ]; then
+        linux_distr="fedora"
+    fi
 
     echo "[*] Begin installation"
 
