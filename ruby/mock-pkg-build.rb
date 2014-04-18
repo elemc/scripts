@@ -1,4 +1,4 @@
-#!/usr/bin/ruby -w
+#!/usr/bin/env ruby
 # -*- coding: utf-8 -*-
 # -*-      Ruby     -*-
 # -------------------------------------- #

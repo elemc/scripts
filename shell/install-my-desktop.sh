@@ -5,10 +5,10 @@ error_present=0
 my_user_name="alex"
 home_dir="/home/${my_user_name}"
 vim_conf_repo="git@github.com:elemc/vim-conf.git"
-monaco_font_url="http://repo.elemc.name/download/sources/Monaco_Linux.ttf"
-smb_conf_url="http://repo.elemc.name/download/sources/smb.conf"
+monaco_font_url="http://repo.elemc.name/sources/Monaco_Linux.ttf"
+smb_conf_url="http://repo.elemc.name/sources/smb.conf"
 epel_6_rurl="http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm"
-epel_5_rurl="http://download.fedoraproject.org/pub/epel/5/i386/epel-release-5-4.noarch.rpm"
+epel_5_rurl="http://mirror.yandex.ru/epel/5/x86_64/epel-release-5-4.noarch.rpm"
 
 pushd_cmd="pushd"
 popd_cmd="popd"
@@ -142,9 +142,9 @@ function install_elemc_repo() {
 
     repo_file=""
     if [ "$linux_distr" == "fedora" ]; then
-        repo_file="http://repo.elemc.name/download/elemc-repo-fedora.repo"
+        repo_file="http://repo.elemc.name/elemc-repo-fedora.repo"
     else # EL
-        repo_file="http://repo.elemc.name/download/elemc-el.repo"
+        repo_file="http://repo.elemc.name/elemc-el.repo"
         echo "[*] Install epel repository"
         el_version=`rpm -qa \*-release | grep -Ei "oracle|redhat|centos|sl" | cut -d"-" -f3 | cut -d"." -f1`
         release_url=""
