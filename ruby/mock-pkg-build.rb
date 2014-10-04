@@ -12,12 +12,12 @@ require 'fileutils'
 
 MOUNT_POINT                 = "/mnt/repos"
 INCOMING_PKGS               = "#{MOUNT_POINT}/incoming-pkgs"
-SSHFS_CMD                   = "/usr/bin/sshfs root@elemc.name:/srv/web/repos #{MOUNT_POINT} -o allow_other,uid=1000,gid=990"
+SSHFS_CMD                   = "/usr/bin/sshfs elemcrepos@repo.elemc.name:/home/elemcrepos #{MOUNT_POINT} -o allow_other,uid=1000,gid=990"
 UMOUNT_CMD                  = "/usr/bin/fusermount -u #{MOUNT_POINT}"
 UPDATE_REPOS_CMD            = "ssh root@elemc.name 'python /usr/local/bin/sortrpms.py'"
 SUPPORTED_ARCHS             = [ "i386", "x86_64" ]
-SUPPORTED_FEDORA_VERSIONS   = [ "19", "20", "rawhide" ]
-SUPPORTED_EPEL_VERSIONS     = [ "6" ]
+SUPPORTED_FEDORA_VERSIONS   = [ "19", "20", "21", "rawhide" ]
+SUPPORTED_EPEL_VERSIONS     = [ "6", "7" ]
 
 class MockPkgBuild < Object
 
@@ -119,6 +119,11 @@ private
     end
 
     def build( build_prefix )
+      if build_prefix == "elemc-epel-7"
+        build_config = "#{build_prefix}-x86_64"
+        @build_result &= run_mock( build_config )
+        return
+      end
         SUPPORTED_ARCHS.each do |arch| 
             build_config = "#{build_prefix}-#{arch}"
             @build_result &= run_mock( build_config )
@@ -164,7 +169,7 @@ private
             error "Error in copy files"
             return false
         end
-        FileUtils.rm_rf( result_dir )
+        #FileUtils.rm_rf( result_dir )
         true
     end
 
