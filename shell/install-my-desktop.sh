@@ -76,8 +76,7 @@ function install_files() {
     else
         packages=$commands
     fi
-
-
+    
     if   [ "$linux_distr" == "fedora" ] || [ "$linux_distr" == "el" ]; then
         $pkg_install_yum $commands || error_present=1
     elif [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ]; then
@@ -206,6 +205,7 @@ function install_vim_files() {
     # create new symlinks
     for vim_d in $vim_files_list; do 
         ln -sf ${home_dir}/workspace/vim-conf/$vim_d ${home_dir}/.$vim_d 
+        ln -sf ${home_dir}/workspace/vim-conf/$vim_d /root/.$vim_d 
         my_chown ${home_dir}/.$vim_d
     done    
 
@@ -215,7 +215,7 @@ $pushd_cmd ${home_dir} > /dev/null 2>&1
 $pushd_cmd workspace > /dev/null 2>&1
 git clone -q ${vim_conf_repo}
 $popd_cmd > /dev/null 2>&1
-git clone -q https://github.com/gmarik/vundle.git ${home_dir}/.vim/bundle/vundle
+git clone -q https://github.com/gmarik/Vundle.vim.git ${home_dir}/.vim/bundle/Vundle.vim
 $popd_cmd > /dev/null 2>&1
 EOF
     my_chown ${home_dir}/workspace
@@ -252,8 +252,32 @@ function change_slackware_locale() {
 }
 
 function install_zsh() {
-    # TODO: will do
-    echo "[ ] zsh"
+    echo "[*] zsh"
+    TMP_ZSHRC_DIR=/tmp/zshrc-files
+    mkdir ${TMP_ZSHRC_DIR}
+    $pushd_cmd ${TMP_ZSHRC_DIR}
+    $curl_cmd -O http://repo.elemc.name/sources/zshrc
+    $curl_cmd -O http://repo.elemc.name/sources/zshrc_root
+
+    cp zshrc_root /root/.zshrc
+    cp zshrc ${home_dir}/.zshrc
+    chown ${my_user_name}:${my_user_name} ${home_dir}/.zshrc
+
+    $popd_cmd
+
+    zsh_shell=/bin/zsh
+
+    if [ "$linux_distr" == "debian" ]; then
+        check_command /bin/zsh4
+        zsh_shell=/usr/bin/zsh
+    else
+        check_command /bin/zsh
+    fi
+
+    chsh -s ${zsh_shell} ${my_user_name}
+    chsh -s ${zsh_shell} root
+
+    rm -rf ${TMP_ZSHRC_DIR}
 }
 
 function selinux_enable_samba() {
@@ -320,11 +344,17 @@ function main() {
 
     head_host=$(setup_variable $1 alex-desktop)
     linux_distr=$(what_is_distro)
+    linux_distr=$(echo ${linux_distr} | sed "s|\"||g")
+
 
     # F*cking RFRemix workaround
     if [ "$linux_distr" == "rfremix" ]; then
         linux_distr="fedora"
     fi
+    if [ "$linux_distr" == "centos" ] || [ "$linux_distr" == "rhel" ]; then
+        linux_distr="el"
+    fi
+    
 
     echo "[*] Begin installation"
 
