@@ -269,7 +269,8 @@ function install_zsh() {
 
     if [ "$linux_distr" == "debian" ]; then
         check_command /bin/zsh4
-        zsh_shell=/usr/bin/zsh
+    elif [ "$linux_distr" == "ubuntu" ]; then
+        check_command /bin/zsh4 /bin/zsh5
     else
         check_command /bin/zsh
     fi
