@@ -7,6 +7,7 @@ home_dir="/home/${my_user_name}"
 vim_conf_repo="git@github.com:elemc/vim-conf.git"
 monaco_font_url="http://repo.elemc.name/sources/Monaco_Linux.ttf"
 smb_conf_url="http://repo.elemc.name/sources/smb.conf"
+epel_7_rurl="http://mirror.yandex.ru/epel/7/x86_64/e/epel-release-7-2.noarch.rpm"
 epel_6_rurl="http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm"
 epel_5_rurl="http://mirror.yandex.ru/epel/5/x86_64/epel-release-5-4.noarch.rpm"
 
@@ -145,12 +146,14 @@ function install_elemc_repo() {
     else # EL
         repo_file="http://repo.elemc.name/elemc-el.repo"
         echo "[*] Install epel repository"
-        el_version=`rpm -qa \*-release | grep -Ei "oracle|redhat|centos|sl" | cut -d"-" -f3 | cut -d"." -f1`
+        # el_version=`rpm -qa \*-release | grep -Ei "oracle|redhat|centos|sl" | cut -d"-" -f3 | cut -d"." -f1`
         release_url=""
         if [ $el_version -eq 6 ]; then
             release_url=$epel_6_rurl
         elif [ $el_version -eq 5 ]; then
             release_url=$epel_5_rurl
+        elif [ $el_version -eq 7 ]; then
+            release_url=$epel_7_rurl
         else
             echo "[x] Don't known EL release: ${el_release}"
             unset release_url
@@ -315,9 +318,16 @@ function install_samba() {
         systemctl enable smb nmb
     elif [ "$linux_distr" == "el" ]; then
         selinux_enable_samba
-        service smb start && service nmb start
-        chkconfig smb on && chkconfig nmb on        
-        chmod og+rx ${home_dir} # only for el 5/6 workaround
+        if [ $el_version -eq 7 ]; then
+            systemctl start smb nmb
+            systemctl enable smb nmb
+            echo "Enter samba password for user '${my_user_name}':"
+            smbpasswd -a ${my_user_name}
+        else
+            service smb start && service nmb start
+            chkconfig smb on && chkconfig nmb on 
+            chmod og+rx ${home_dir} # only for el 5/6 workaround
+        fi
     elif [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ]; then
         service samba restart
     elif [ "$linux_distr" == "slackware" ]; then
@@ -346,6 +356,7 @@ function main() {
     head_host=$(setup_variable $1 alex-desktop)
     linux_distr=$(what_is_distro)
     linux_distr=$(echo ${linux_distr} | sed "s|\"||g")
+    el_version=""
 
 
     # F*cking RFRemix workaround
@@ -353,7 +364,9 @@ function main() {
         linux_distr="fedora"
     fi
     if [ "$linux_distr" == "centos" ] || [ "$linux_distr" == "rhel" ]; then
+        el_version=`rpm -qa \*-release | grep -Ei "oracle|redhat|centos|sl" | cut -d"-" -f3 | cut -d"." -f1`
         linux_distr="el"
+        
     fi
     
 
