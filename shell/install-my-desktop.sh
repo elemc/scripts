@@ -18,6 +18,7 @@ pkg_install_debian="apt-get -y -q=2 install"
 pkg_install_yum="yum -y -q install"
 pkg_install_suse="zypper -n -q install"
 pkg_install_mageia="urpmi --quiet --force"
+pkg_install_arch="pacman -S --quiet --noconfirm"
 
 function what_is_distro() {
     if   [ -f /etc/os-release ]; then
@@ -62,6 +63,9 @@ function get_package_name_by_cmd() {
     elif [ "$linux_distr" == "mageia" ]; then
         package=`urpmf "^${1}$" | cut -d ":" -f 1`
         echo $package
+    elif [ "$linux_distr" == "arch" ]; then
+        package=`pkgfile $1`
+        echo $package
     fi
 }
 
@@ -69,7 +73,7 @@ function install_files() {
     commands=$1
     packages=""
 
-    if [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ] || [ "$linux_distr" == "opensuse" ] || [ "$linux_distr" == "mageia" ]; then
+    if [ "$linux_distr" == "debian" ] || [ "$linux_distr" == "ubuntu" ] || [ "$linux_distr" == "opensuse" ] || [ "$linux_distr" == "mageia" ] || [ "$linux_distr" == "arch" ]; then
         for cmd in $commands; do
             pkg=$(get_package_name_by_cmd $cmd)
             packages="$packages $pkg" 
@@ -88,6 +92,8 @@ function install_files() {
         $pkg_install_suse $packages || error_present=1
     elif [ "$linux_distr" == "mageia" ]; then
         $pkg_install_mageia $packages || error_present=1
+    elif [ "$linux_distr" == "arch" ]; then
+        $pkg_install_arch $packages > /dev/null 2>&1 || error_present=1
     fi  
 }
 
@@ -274,6 +280,8 @@ function install_zsh() {
         check_command /bin/zsh4
     elif [ "$linux_distr" == "ubuntu" ]; then
         check_command /bin/zsh4 /bin/zsh5
+    elif [ "$linux_distr" == "arch" ]; then
+        check_command /usr/bin/zsh
     else
         check_command /bin/zsh
     fi
@@ -292,8 +300,14 @@ function selinux_enable_samba() {
 function install_samba() {
     echo "[*] Install samba"
 
-    check_command /usr/sbin/nmbd
-    check_command /usr/sbin/smbd
+    if [ "$linux_distr" == "arch" ]; then
+        check_command /usr/bin/nmbd
+        check_command /usr/bin/smbd
+    else
+        check_command /usr/sbin/nmbd
+        check_command /usr/sbin/smbd
+    fi
+
     check_command /usr/bin/curl
     check_command /bin/hostname
 
@@ -341,6 +355,9 @@ function install_samba() {
     elif [ "$linux_distr" == "mageia" ]; then
         systemctl start smb nmb
         systemctl enable smb nmb
+    elif [ "$linux_distr" == "arch" ]; then
+        systemctl start smbd nmbd
+        systemctl enable smbd nmbd
     fi
 
     $popd_cmd > /dev/null 2>&1
@@ -368,8 +385,8 @@ function main() {
         linux_distr="el"
         
     fi
-    
 
+    echo "[I] Distributive: ${linux_distr}"
     echo "[*] Begin installation"
 
     # Checks
@@ -380,6 +397,11 @@ function main() {
         if [ $error_present -ne 1 ]; then
             apt-file update > /dev/null 2>&1
         fi
+    elif [ "$linux_distr" == "arch" ]; then
+        if [ ! -x /usr/bin/pkgfile ]; then
+            $pkg_install_arch pkgfile > /dev/null 2>&1
+        fi
+        pkgfile --update --quiet > /dev/null 2>&1
     fi
 
     # Check user present
