@@ -14,7 +14,7 @@ MOUNT_POINT                 = "/mnt/repos"
 INCOMING_PKGS               = "#{MOUNT_POINT}/incoming-pkgs"
 SSHFS_CMD                   = "/usr/bin/sshfs elemcrepos@repo.elemc.name:/home/elemcrepos #{MOUNT_POINT} -o allow_other,uid=1000,gid=990"
 UMOUNT_CMD                  = "/usr/bin/fusermount -u #{MOUNT_POINT}"
-UPDATE_REPOS_CMD            = "ssh root@elemc.name 'python /usr/local/bin/sortrpms.py'"
+UPDATE_REPOS_CMD            = "ssh elemcrepos@repo.elemc.name 'python /usr/local/bin/sortrpms.py'"
 SUPPORTED_ARCHS             = [ "i386", "x86_64" ]
 SUPPORTED_FEDORA_VERSIONS   = [ "19", "20", "21", "rawhide" ]
 SUPPORTED_EPEL_VERSIONS     = [ "6", "7" ]
