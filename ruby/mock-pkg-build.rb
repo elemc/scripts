@@ -169,7 +169,7 @@ private
             error "Error in copy files"
             return false
         end
-        #FileUtils.rm_rf( result_dir )
+        FileUtils.rm_rf( result_dir )
         true
     end
 
